@@ -1,0 +1,91 @@
+---
+title: "Linear Model"
+output:
+  html_notebook: default
+  pdf_document: default
+---
+
+This analysis is to check which factors influences the profit in the "Startup" dataset and based on those fctors we are to model the variable, profit.
+
+
+Thus, calling the necessary libraries
+```{r}
+library(readr)
+library(nortest)
+library(dplyr)
+```
+
+Inserting the data set
+```{r}
+data=readxl::read_excel(file.choose())    #Taking the file as an input. 
+df=data.frame(data)
+head(df)
+```
+
+To get a basic visual impact of the factors on Profit, a scatter plot and the box plots are drawn.
+```{r}
+factors=names(df)
+l=length(factors)
+par(mfrow=c(2,2))
+for(i in 1:l)
+{
+  if(is.numeric(df[,i])==1 & factors[i]!="Profit")
+     {
+      plot(df[,i],df[,5],xlab=factors[i],ylab="Profit")
+     }
+}
+boxplot(df$Profit~df$State)
+```
+
+Calculating the pairwise total correlations to detect the variable which has the highest correlation with the Profit.
+```{r}
+TC=cor(df[,-4],method="pearson");TC
+```
+From, the matrix, TC, it is seen that, the profit has the highest correlation with, R.D. Spend.Thus, considering R.D. Spend, the independent variable which factors profit, and then we will find out the pairwise partial correlations, removing the effect of R.D. Spend from the other two variabes.
+In order to do that, we need to check the partial correlations.
+```{r}
+TC1=TC[-3,-3]
+TC2=TC[-which(row.names(TC)=="Administration"),-which(row.names(TC)=="Administration")]
+#The function for calculating the minors
+minor1=function(matrix,i,j)
+{
+  m=((-1)^(i+j))*det(matrix[-i,-j])
+  return(m)
+}
+rprofit_admin_._RD_Spend=minor1(TC1,which(row.names(TC1)=="Profit"),which(colnames(TC1)=="Administration"))/sqrt(minor1(TC1,which(row.names(TC1)=="Profit"),which(colnames(TC1)=="Profit"))*minor1(TC1,which(row.names(TC1)=="Administration"),which(colnames(TC1)=="Administration")))
+rprofit_MS_._RD_Spend=minor1(TC2,which(row.names(TC2)=="Profit"),which(colnames(TC2)=="Marketing.Spend"))/sqrt(minor1(TC2,which(row.names(TC2)=="Profit"),which(colnames(TC2)=="Profit"))*minor1(TC2,which(row.names(TC2)=="Marketing.Spend"),which(colnames(TC2)=="Marketing.Spend")))
+rprofit_admin_._MS_RD_Spend=minor1(TC,which(row.names(TC)=="Profit"),which(colnames(TC)=="Administration"))/sqrt(minor1(TC,which(row.names(TC)=="Profit"),which(colnames(TC)=="Profit"))*minor1(TC,which(row.names(TC)=="Administration"),which(colnames(TC)=="Administration")))
+data.frame(rprofit_admin_._RD_Spend,rprofit_MS_._RD_Spend,rprofit_admin_._MS_RD_Spend)
+```
+Thus, we consider RD Spend, Marketing Spend and the States as the predictors in predicting the profit. Now we will be checking that how significant these three independent variables are in predicting the profit. That is, we need to test the H0j: bj=0 vs H1j: bj !=0 for j=0,1,2 and the levels for the states, H0: S1=S2=S3=0 vs H1: not H0 in the equation, profit= b0 + State + b1*RD Spend + b2*Marketing Spend.
+```{r}
+summary(aov(df$Profit~df$State+df$R.D.Spend+df$Marketing.Spend,data=df))
+```
+Now, from the above results it is clear that, at 5% level of significance, we failed to reject that, H02: b2=0.Thus, our new model will be of the form, profit= b0 + State + b1*RD Spend.
+```{r}
+model=lm(Profit~State + R.D.Spend,data = df)
+summary(model)
+```
+Checking the randomness and the normality of the residuals, obtained from the fitted model.
+```{r}
+residuals= resid(model)
+fits=fitted.values(model)
+par(mfrow=c(2,1))
+plot(fits,residuals,main = "Fits vs residuals")
+abline(lm(residuals~fits))
+qqnorm(residuals); qqline(residuals)
+```
+Visually, the error seems to be random, lets check it computationally as well by performing a normality test.
+```{r}
+lillie.test(residuals)     #Kolmogorov- Smirnov test for normality
+```
+Thus, at 1% level of significance, we failed to reject the assumption of normality to the residuals.
+```{r}
+per=0.9467*100;per
+```
+The above is the measure of eficacy of the model.
+Lets test the predictability of the linear model.
+```{r}
+newdat=data.frame(R.D.Spend=192305, State = "Florida")
+predict(model,newdata = newdat,interval = "confidence")  #Prediction with the confidence intervals
+```
